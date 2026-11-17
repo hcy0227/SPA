@@ -249,7 +249,7 @@ input[type=number]{text-align:right}
       })
       .map(function (row) {
         return {
-          id: uid(),
+          id: row.id || uid(),
           category: row.category || "清潔",
           name: String(row.name || ""),
           ml: String(row.ml == null ? "" : row.ml),
@@ -843,6 +843,15 @@ input[type=number]{text-align:right}
     // 公司端「產品項目」新增的產品，同步建立到「產品定價」並以相同 ID 維持連動。
     function ensurePricingProduct(companyProduct){
       var linked=data.pricingProducts.find(function(p){return p.id===companyProduct.id;});
+      // 舊資料曾在載入時重建產品 ID，改以分類＋名稱＋容量辨識既有項目，避免每次載入都新增副本。
+      if(!linked && String(companyProduct.name||"").trim()){
+        linked=data.pricingProducts.find(function(p){
+          return String(p.category||"清潔")===String(companyProduct.category||"清潔") &&
+            String(p.name||"").trim()===String(companyProduct.name||"").trim() &&
+            String(p.ml==null?"":p.ml)===String(companyProduct.ml==null?"":companyProduct.ml);
+        });
+        if(linked)linked.id=companyProduct.id;
+      }
       if(!linked){
         linked={
           id:companyProduct.id,
