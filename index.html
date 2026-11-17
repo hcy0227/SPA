@@ -504,11 +504,16 @@ input[type=number]{text-align:right}
       input.addEventListener("input", function () {
         row[property] = input.value;
         if (["name","ml","price"].includes(property)) {
-          var linkedPricing = data.pricingProducts.find(function (p) { return p.id === row.id; });
-          if (linkedPricing) linkedPricing[property] = input.value;
+          // 若此產品尚未建立定價資料，輸入內容時立即建立；後續欄位同步更新。
+          var linkedPricing = ensurePricingProduct(row);
+          linkedPricing[property] = input.value;
+          linkedPricing.category = row.category || linkedPricing.category || "清潔";
         }
         markChanged();
         syncProducts();
+      });
+      input.addEventListener("change", function () {
+        if (["name","ml","price"].includes(property)) renderPricingProducts();
       });
 
       return input;
@@ -1303,6 +1308,11 @@ $("exportAll").onclick = exportAllPdf;
         button.disabled=false;button.textContent="登入並同步雲端";
       }
     };
+    // 先將「產品項目」既有資料補進產品定價，再首次繪製定價分頁。
+    data.products.forEach(function(product){
+      if(!product.id)product.id=uid();
+      ensurePricingProduct(product);
+    });
     renderPricingProducts();
 
 $("exportHistory").onclick = exportHistoryPdf;
@@ -1547,10 +1557,6 @@ $("exportHistory").onclick = exportHistoryPdf;
       drawCalculator(id);
     });
 
-    data.products.forEach(function(product){
-      if(!product.id)product.id=uid();
-      ensurePricingProduct(product);
-    });
     renderProducts();
     syncProducts();
     drawHistory();
