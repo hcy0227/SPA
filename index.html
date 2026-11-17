@@ -840,6 +840,27 @@ input[type=number]{text-align:right}
     var planKeys=["basic","advanced","premium"];
     var planNames=["煥顏基礎","緊緻進階","奢寵全效"];
 
+    // 清除舊版重複建立的定價項目；以分類、名稱、容量辨識同一產品，保留既有套組數量。
+    var uniquePricingProducts=[];
+    var pricingProductKeys={};
+    data.pricingProducts.forEach(function(product){
+      if(!product || typeof product!=="object")return;
+      var name=String(product.name||"").trim();
+      var key=name?[String(product.category||"清潔"),name,String(product.ml==null?"":product.ml)].join("|"):"id:"+String(product.id||"");
+      if(pricingProductKeys[key]){
+        var existing=pricingProductKeys[key];
+        existing.plans=existing.plans||{};
+        product.plans=product.plans||{};
+        ["basic","advanced","premium"].forEach(function(plan){
+          if(!(Number(existing.plans[plan])>0) && Number(product.plans[plan])>0)existing.plans[plan]=product.plans[plan];
+        });
+        return;
+      }
+      pricingProductKeys[key]=product;
+      uniquePricingProducts.push(product);
+    });
+    data.pricingProducts=uniquePricingProducts;
+
     // 公司端「產品項目」新增的產品，同步建立到「產品定價」並以相同 ID 維持連動。
     function ensurePricingProduct(companyProduct){
       var linked=data.pricingProducts.find(function(p){return p.id===companyProduct.id;});
