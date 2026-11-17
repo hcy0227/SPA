@@ -132,6 +132,10 @@ function savePlan(planId){
 function escapeHtml(value){return String(value==null?"":value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function render(data){
   var grid=document.querySelector(".grid");if(!grid||!data||!Array.isArray(data.rows))return;
+  var openDetails={};
+  Array.prototype.forEach.call(grid.querySelectorAll(".plan"),function(card){
+    var detail=card.querySelector(".detail");if(detail&&!detail.hidden)openDetails[card.getAttribute("data-row-key")||card.id]=true;
+  });
   grid.innerHTML="";
   var names=["煥顏基礎方案","緊緻進階方案","奢寵全效方案"],tags=["基礎保養","熱銷推薦","完整方案"];
   data.rows.slice().sort(function(a,b){return Number(a.targetIndex)-Number(b.targetIndex);}).forEach(function(row,rowIndex){
@@ -143,6 +147,8 @@ function render(data){
     }).join(""):"<li>尚未選擇產品</li>";
     var homeCareItems=[["專屬保養規劃","產品使用教學"],["專屬保養規劃","產品使用教學","進度追蹤"],["專屬保養規劃","產品使用教學","進度追蹤","優先預約"]][target]||["專屬保養規劃","產品使用教學"];
     var card=document.createElement("section");card.className="plan";card.id="customerPlan"+rowIndex;
+    var rowKey=[target,row.historyTime||"",row.sourcePlanName||"",Number(row.price)||0,Number(row.sessions)||0].join("|");
+    card.setAttribute("data-row-key",rowKey);
     card.innerHTML=
       '<span class="tag">'+escapeHtml(tags[target]||"專屬方案")+'</span>'+
       '<h2>'+escapeHtml(planName)+'</h2>'+
@@ -155,7 +161,8 @@ function render(data){
       '<ul class="includes">'+homeCareItems.map(function(item){return "<li>"+escapeHtml(item)+"</li>";}).join("")+'</ul>'+
       '<div class="cta"><button class="btn export-plan" type="button">匯出方案</button></div>';
     var button=card.querySelector("button.link");
-    button.addEventListener("click",function(){var detail=card.querySelector(".detail");detail.hidden=!detail.hidden;});
+    var detailPanel=card.querySelector(".detail");detailPanel.hidden=!openDetails[rowKey];
+    button.addEventListener("click",function(){detailPanel.hidden=!detailPanel.hidden;});
     card.querySelector(".export-plan").addEventListener("click",function(){savePlan(card.id);});
     grid.appendChild(card);
   });
