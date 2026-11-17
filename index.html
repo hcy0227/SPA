@@ -900,14 +900,17 @@ input[type=number]{text-align:right}
       var name=document.createElement("input");
       name.type="text";name.value=item.name||"";name.placeholder="產品名稱";
       name.oninput=function(){item.name=name.value;updatePricingTotal();save();};
+      name.onchange=function(){item.name=name.value;save();syncCustomerData();};
       var ml=document.createElement("input");
       ml.type="number";ml.min="0";ml.step="any";
       ml.value=item.ml||"";ml.placeholder="容量 ml";
       ml.oninput=function(){item.ml=ml.value;save();};
+      ml.onchange=function(){item.ml=ml.value;save();syncCustomerData();};
       var price=document.createElement("input");
       price.type="number";price.min="0";price.step="any";
       price.value=item.price||"";price.placeholder="價格";
       price.oninput=function(){item.price=price.value;updatePricingTotal();save();};
+      price.onchange=function(){item.price=price.value;save();syncCustomerData();};
       var plans=document.createElement("div");
       plans.style.cssText="display:contents;";
       planKeys.forEach(function(key,i){
@@ -920,6 +923,7 @@ input[type=number]{text-align:right}
         count.placeholder="0";
         count.setAttribute("aria-label",planNames[i]+"產品數量");
         count.oninput=function(){item.plans=item.plans||{};item.plans[key]=Math.max(0,Math.floor(Number(count.value)||0));updatePricingTotal();save();};
+        count.onchange=function(){item.plans=item.plans||{};item.plans[key]=Math.max(0,Math.floor(Number(count.value)||0));save();syncCustomerData();};
         lab.appendChild(count);plans.appendChild(lab);
       });
       var del=document.createElement("button");
@@ -927,6 +931,7 @@ input[type=number]{text-align:right}
       del.onclick=function(){
         data.pricingProducts=data.pricingProducts.filter(function(p){return p.id!==item.id;});
         renderPricingProducts();
+        syncCustomerData();
       };
       row.appendChild(name);row.appendChild(ml);row.appendChild(price);row.appendChild(plans);row.appendChild(del);
       return row;
