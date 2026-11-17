@@ -799,11 +799,11 @@ input[type=number]{text-align:right}
         item.result.rows.forEach(function(row,sourceIndex){
           var targetIndex=Number(mapping[sourceIndex]);
           if(!Number.isInteger(targetIndex) || targetIndex<0 || targetIndex>2)return;
-          var sourcePlanKey=planKeys[sourceIndex];
+          var targetPlanKey=planKeys[targetIndex];
           var products=historicalProducts.filter(function(p){
-            return p.plans&&Number(p.plans[sourcePlanKey])>0;
+            return p.plans&&Number(p.plans[targetPlanKey])>0;
           }).map(function(p){
-            return {name:String(p.name||"未命名產品"),ml:String(p.ml||""),quantity:Number(p.plans[sourcePlanKey])||0};
+            return {name:String(p.name||"未命名產品"),ml:String(p.ml||""),quantity:Number(p.plans[targetPlanKey])||0};
           });
           customerRows.push({
             targetIndex:targetIndex,
