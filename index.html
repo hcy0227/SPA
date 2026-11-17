@@ -63,6 +63,8 @@ input[type=number]{text-align:right}
 #pricing #productList .product .fields>div:nth-child(3) input{grid-column:5!important;}
 #pricing #productList .product button.danger{grid-row:1!important;grid-column:6!important;margin:0!important;}
 #pricing #productList .product input::placeholder{font-size:10px!important;color:#89958e!important;opacity:1!important;}
+#productList .product.invalid-row,#pricing #productList .product.invalid-row{background:#fdeee9!important;box-shadow:inset 0 0 0 2px #a05542!important;border-radius:8px;}
+#productList .product.invalid-row .row-head small{color:#a05542;}
 </style><style id="pricing-row-style">
 #productPricing .pricing-row input{font-size:12px!important;padding:6px 8px!important;}
 #productPricing .pricing-row input::placeholder{font-size:10px!important;color:#89958e!important;opacity:1!important;}
@@ -126,11 +128,14 @@ input[type=number]{text-align:right}
     var SUPABASE_ANON_KEY = "sb_publishable_X1grp4ZPnv4YesF9oYv97Q_JBqBDJAM";
     var SUPABASE_TABLE = "beauty_customer_sync";
     var cloudSessionKey = "beautySpaSupabaseSession";
+    var suppressCloudNotice = false;
     function getCloudSession(){try{return JSON.parse(localStorage.getItem(cloudSessionKey)||"null");}catch(e){return null;}}
     async function pushCustomerPayload(payload){
       var session=getCloudSession();
       if(!session||!session.access_token){
-        $("storageStatus").textContent="資料已在本機保存；請先登入雲端，再同步歷史方案。";
+        if(!suppressCloudNotice){
+          $("storageStatus").textContent="資料已在本機保存；請先登入雲端，再同步歷史方案。";
+        }
         return false;
       }
       $("storageStatus").className="note footer";
@@ -212,8 +217,17 @@ input[type=number]{text-align:right}
         // 還原最近一次計算結果，避免重新整理後顧客端讀不到套組價格。
         if (saved.lastResult && Array.isArray(saved.lastResult.rows)) {
           data.lastResult = saved.lastResult;
+          if (saved.lastResultInputs && typeof saved.lastResultInputs === "object") {
+            data.lastResultInputs = saved.lastResultInputs;
+          }
         } else if (data.prices.length && data.prices[0].result && Array.isArray(data.prices[0].result.rows)) {
           data.lastResult = data.prices[0].result;
+          if (data.prices[0].inputs) {
+            data.lastResultInputs = data.prices[0].inputs;
+          }
+        }
+        if (data.lastResult && !data.lastResultInputs && data.prices.length && data.prices[0] && data.prices[0].inputs) {
+          data.lastResultInputs = data.prices[0].inputs;
         }
       } else {
         var previous = JSON.parse(
@@ -362,30 +376,37 @@ input[type=number]{text-align:right}
       var priceCents = 0;
       var costCents = 0;
       var count = 0;
-      var invalid = false;
+      var invalidIds = [];
+      var invalidReasons = {};
 
       data.products.forEach(function (row) {
         if (!row.selected) return;
 
         count++;
 
-        var price = Number(row.price);
-        var cost = Number(row.cost);
-        var ml = Number(row.ml);
+        var priceText = String(row.price == null ? "" : row.price).trim();
+        var costText = String(row.cost == null ? "" : row.cost).trim();
+        var mlText = String(row.ml == null ? "" : row.ml).trim();
+        var price = Number(priceText);
+        var cost = Number(costText);
+        var ml = Number(mlText);
+        var reasons = [];
 
-        if (
-          row.price.trim() === "" ||
-          row.cost.trim() === "" ||
-          !Number.isFinite(price) ||
-          !Number.isFinite(cost) ||
-          price < 0 ||
-          cost < 0 ||
-          (
-            row.ml.trim() !== "" &&
-            (!Number.isFinite(ml) || ml < 0)
-          )
-        ) {
-          invalid = true;
+        if (priceText === "" || !Number.isFinite(price) || price < 0) {
+          reasons.push("產品價格");
+        }
+
+        if (costText === "" || !Number.isFinite(cost) || cost < 0) {
+          reasons.push("數量");
+        }
+
+        if (mlText !== "" && (!Number.isFinite(ml) || ml < 0)) {
+          reasons.push("ml 數");
+        }
+
+        if (reasons.length) {
+          invalidIds.push(row.id);
+          invalidReasons[row.id] = reasons.join("／");
           return;
         }
 
@@ -397,7 +418,9 @@ input[type=number]{text-align:right}
         price: priceCents / 100,
         cost: costCents / 100,
         count: count,
-        invalid: invalid
+        invalid: invalidIds.length > 0,
+        invalidIds: invalidIds,
+        invalidReasons: invalidReasons
       };
     }
 
@@ -413,7 +436,16 @@ input[type=number]{text-align:right}
       var message;
 
       if (result.invalid) {
-        message = "";
+        var badRows = data.products.filter(function (row) {
+          return result.invalidIds.indexOf(row.id) !== -1;
+        });
+        message = "以下勾選產品的資料不完整（紅色標示），補齊後才能計算：" +
+          badRows.map(function (row) {
+            var name = row.name && row.name.trim()
+              ? row.name.trim()
+              : "未命名（" + row.category + "）";
+            return name + "（缺" + result.invalidReasons[row.id] + "）";
+          }).join("、");
       } else if (data.productMode) {
         $("pc").value = result.cost.toFixed(2);
         $("pp").value = result.price.toFixed(2);
@@ -431,6 +463,22 @@ input[type=number]{text-align:right}
       $("productStatus").textContent = message;
       $("productStatus").className =
         "status" + (result.invalid ? " error" : "");
+
+      var invalidSet = {};
+      result.invalidIds.forEach(function (id) {
+        invalidSet[id] = true;
+      });
+
+      $("productList").querySelectorAll(".product").forEach(function (card) {
+        var row = data.products.find(function (item) {
+          return item.id === card.getAttribute("data-id");
+        });
+
+        card.classList.toggle(
+          "invalid-row",
+          !!(row && row.selected && invalidSet[row.id])
+        );
+      });
 
       save();
       return result;
@@ -500,6 +548,7 @@ input[type=number]{text-align:right}
           if(!categories.includes(row.category)) row.category="清潔";
           if(row.category!==category)return;
         var card = document.createElement("div");
+        card.setAttribute("data-id", row.id);
         card.className =
           "product" + (row.selected ? " selected" : "");
 
@@ -902,7 +951,7 @@ input[type=number]{text-align:right}
           line("上述金額平均每堂",
             money((row.price - settings.pp) / row.sessions)) +
           line("分潤前利潤", money(row.profit)) +
-          line("美容師分潤比例", fmt(settings.share) + "%") +
+          line("美容師分潤比例", fmt(settings.share) + "%" + (settings.share > 0 ? "" : "（未設定）")) +
           line("美容師總分潤／套", money(row.staff)) +
           line("公司保留／套", money(row.company)) +
           line("公司保留利潤率", fmt(row.companyMargin) + "%") +
@@ -1005,11 +1054,13 @@ input[type=number]{text-align:right}
     $("calculatePrice").onclick = function () {
       try {
         if (data.productMode && syncProducts().invalid) {
-          throw new Error("請先修正已勾選產品的資料。");
+          throw new Error("請先修正已勾選產品的資料（產品清單中紅色標示的項目），補齊後再按計算。");
         }
 
         var settings = readSettings();
         var result = compute(settings);
+
+        data.lastResultInputs = settings;
 
         // 每次新計算的三個套組，預設皆不同步至顧客端。
         data.customerMapping = [-1, -1, -1];
@@ -1027,9 +1078,13 @@ input[type=number]{text-align:right}
         drawHistory();
 
         $("priceStatus").className = "status";
-        $("priceStatus").textContent = persisted
-          ? "計算完成，已儲存定價紀錄。"
-          : "計算完成，紀錄僅暫存；請匯出備份。";
+        $("priceStatus").textContent =
+          (persisted
+            ? "計算完成，已儲存定價紀錄。"
+            : "計算完成，紀錄僅暫存；請匯出備份。") +
+          (settings.share > 0
+            ? ""
+            : "　注意：美容師分潤比例為 0%，分潤金額為 $0；請在「方案」頁籤填入分潤比例後重新計算。");
       } catch (error) {
         $("priceStatus").className = "status error";
         $("priceStatus").textContent = error.message;
@@ -1459,8 +1514,26 @@ $("exportHistory").onclick = exportHistoryPdf;
     drawHistory();
     save();
 
-    $("priceStatus").textContent =
-      "工作台已載入，可以切換分頁及開始計算。";
+    // 重新開啟網頁時，自動還原上次計算結果，不用重新按計算。
+    if (data.lastResult && Array.isArray(data.lastResult.rows) && data.lastResultInputs) {
+      var restoredInputs = {};
+      ["pc","pp","sc","gm","rent","util","mat","staff","daily","days","usage","low","mid","high","share","le","me","he"].forEach(function (settingId) {
+        var value = Number(data.lastResultInputs[settingId]);
+        restoredInputs[settingId] = Number.isFinite(value) && value >= 0 ? value : 0;
+      });
+      suppressCloudNotice = true;
+      try {
+        drawResults(restoredInputs, data.lastResult);
+        $("priceStatus").textContent = "已載入上次計算結果。若有變更設定，請重新按「開始計算並儲存」。" +
+          (restoredInputs.share > 0
+            ? ""
+            : "　注意：上次計算的美容師分潤比例為 0%，分潤金額為 $0。");
+      } catch (error) {}
+      suppressCloudNotice = false;
+    } else {
+      $("priceStatus").textContent =
+        "工作台已載入，可以切換分頁及開始計算。";
+    }
   }
 
   function showStartError(error) {
