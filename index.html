@@ -503,6 +503,10 @@ input[type=number]{text-align:right}
 
       input.addEventListener("input", function () {
         row[property] = input.value;
+        if (["name","ml","price"].includes(property)) {
+          var linkedPricing = data.pricingProducts.find(function (p) { return p.id === row.id; });
+          if (linkedPricing) linkedPricing[property] = input.value;
+        }
         markChanged();
         syncProducts();
       });
@@ -542,7 +546,14 @@ input[type=number]{text-align:right}
         var title=document.createElement("h3"); title.textContent=category;
         var add=document.createElement("button"); add.textContent="＋ 新增產品";
         var box=document.createElement("div"); box.className="category-products";
-        add.onclick=function(){data.products.push({id:uid(),category:category,name:"",ml:"",price:"",cost:"1",selected:false});renderProducts();syncProducts();};
+        add.onclick=function(){
+          var newProduct={id:uid(),category:category,name:"",ml:"",price:"",cost:"1",selected:false};
+          data.products.push(newProduct);
+          ensurePricingProduct(newProduct);
+          renderProducts();
+          renderPricingProducts();
+          syncProducts();
+        };
         header.append(title,add); block.append(header,box); list.append(block);
         data.products.forEach(function(row,index){
           if(!categories.includes(row.category)) row.category="清潔";
@@ -606,8 +617,11 @@ input[type=number]{text-align:right}
           data.products = data.products.filter(function (product) {
             return product.id !== row.id;
           });
-
+          data.pricingProducts = data.pricingProducts.filter(function (product) {
+            return product.id !== row.id;
+          });
           renderProducts();
+          renderPricingProducts();
           markChanged();
           syncProducts();
         };
@@ -820,6 +834,30 @@ input[type=number]{text-align:right}
     var pricingCategories=["清潔","化妝水","去角質","精華","面膜","滋養","隔離"];
     var planKeys=["basic","advanced","premium"];
     var planNames=["煥顏基礎","緊緻進階","奢寵全效"];
+
+    // 公司端「產品項目」新增的產品，同步建立到「產品定價」並以相同 ID 維持連動。
+    function ensurePricingProduct(companyProduct){
+      var linked=data.pricingProducts.find(function(p){return p.id===companyProduct.id;});
+      if(!linked){
+        linked={
+          id:companyProduct.id,
+          category:companyProduct.category||"清潔",
+          name:companyProduct.name||"",
+          ml:companyProduct.ml||"",
+          price:companyProduct.price||"",
+          cost:"",
+          qty:"1",
+          plans:{basic:0,advanced:0,premium:0}
+        };
+        data.pricingProducts.push(linked);
+      }else{
+        linked.category=companyProduct.category||linked.category||"清潔";
+        linked.name=companyProduct.name||"";
+        linked.ml=companyProduct.ml||"";
+        linked.price=companyProduct.price||"";
+      }
+      return linked;
+    }
 
     function renderPricingProducts(){
       var wrap=$("pricingList");
@@ -1509,6 +1547,10 @@ $("exportHistory").onclick = exportHistoryPdf;
       drawCalculator(id);
     });
 
+    data.products.forEach(function(product){
+      if(!product.id)product.id=uid();
+      ensurePricingProduct(product);
+    });
     renderProducts();
     syncProducts();
     drawHistory();
